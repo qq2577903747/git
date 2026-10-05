@@ -1,0 +1,14 @@
+[gd_resource type="TileSet" format=3 uid="uid://c2ndttbxv2aub"]
+
+[ext_resource type="Texture2D" uid="uid://41uvw53c0d1n" path="res://assets/灰_808080_32x32.png" id="1_l70by"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_ylah7"]
+texture = ExtResource("1_l70by")
+texture_region_size = Vector2i(32, 32)
+0:0/0 = 0
+0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-16, -16, 16, -16, 16, 16, -16, 16)
+
+[resource]
+tile_size = Vector2i(32, 32)
+physics_layer_0/collision_layer = 1
+sources/1 = SubResource("TileSetAtlasSource_ylah7")
