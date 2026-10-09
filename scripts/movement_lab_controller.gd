@@ -22,7 +22,7 @@ var _station_spawns := {
 	1: Vector2(112.0, 616.0),
 	2: Vector2(432.0, 616.0),
 	3: Vector2(752.0, 616.0),
-	4: Vector2(1120.0, 616.0),
+	4: Vector2(1136.0, 616.0),
 }
 
 var _station_names := {
@@ -98,11 +98,11 @@ func _build_geometry() -> void:
 	_add_rect(_solid_layer, 78, 79, 0, 44, 1)
 	_add_rect(_solid_layer, 2, 77, 40, 44, 1)
 
-	_add_rect(_solid_layer, 65, 67, 20, 39, 1)
-	_add_rect(_solid_layer, 77, 79, 20, 39, 1)
+	_add_rect(_solid_layer, 61, 63, 20, 39, 1)
+	_add_rect(_solid_layer, 78, 79, 20, 39, 1)
 
 	# DOUBLE 区的一向平台，放在地面以上 192px，验证顶点二跳。
-	_add_rect(_one_way_layer, 27, 35, 28, 28, 2)
+	_add_rect(_one_way_layer, 25, 35, 28, 28, 2)
 
 
 func _build_markers() -> void:
@@ -121,7 +121,7 @@ func _build_markers() -> void:
 	_add_line(Vector2(752.0, 660.0), Vector2(912.0, 660.0), marker_color)
 
 	# WALL：标出两面墙之间 192px 的水平距离。
-	_add_line(Vector2(1056.0, 660.0), Vector2(1248.0, 660.0), marker_color)
+	_add_line(Vector2(1040.0, 660.0), Vector2(1232.0, 660.0), marker_color)
 
 
 func _build_station_labels() -> void:
