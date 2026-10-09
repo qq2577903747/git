@@ -1,14 +1,21 @@
 [gd_resource type="TileSet" format=3 uid="uid://c2ndttbxv2aub"]
 
 [ext_resource type="Texture2D" uid="uid://41uvw53c0d1n" path="res://assets/灰_808080_32x32.png" id="1_l70by"]
+[ext_resource type="Texture2D" uid="uid://c0yy8jxn7l7su" path="res://assets/蓝_0066CC_32x32.png" id="2_blue"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_ylah7"]
 texture = ExtResource("1_l70by")
-texture_region_size = Vector2i(16, 16)
 0:0/0 = 0
 0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
 
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_blue"]
+texture = ExtResource("2_blue")
+0:0/0 = 0
+0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+0:0/0/physics_layer_0/polygon_0/one_way = true
+0:0/0/physics_layer_0/polygon_0/one_way_margin = 4.0
+
 [resource]
-tile_size = Vector2i(16, 16)
 physics_layer_0/collision_layer = 1
 sources/1 = SubResource("TileSetAtlasSource_ylah7")
+sources/2 = SubResource("TileSetAtlasSource_blue")

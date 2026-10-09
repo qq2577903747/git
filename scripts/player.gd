@@ -1,50 +1,182 @@
 extends CharacterBody2D
 
-# 水平移动参数可在检查器中直接调整。
-@export_group("水平移动")
-@export_range(0.0, 600.0, 1.0) var ground_speed := 360.0
-@export_range(0.0, 600.0, 1.0) var air_speed := 360.0
+@export_group("Horizontal")
+@export_range(0.0, 600.0, 1.0) var ground_speed := 240.0
+@export_range(0.0, 600.0, 1.0) var air_speed := 240.0
 @export_range(0.0, 5000.0, 10.0) var ground_acceleration := 4000.0
-@export_range(0.0, 3000.0, 10.0) var air_acceleration := 2000.0
+@export_range(0.0, 5000.0, 10.0) var air_acceleration := 4000.0
 @export_range(0.0, 3000.0, 10.0) var ground_friction := 1600.0
 @export_range(0.0, 500.0, 1.0) var air_friction := 80.0
 
-# 重力与最大下落速度。
-const GRAVITY := 1400.0
-const MAX_FALL_SPEED := 700.0
-# 满跳初速与松手截断速度。Godot 的 Y 轴向下，所以向上是负数。
-const JUMP_VELOCITY := -560.0
-const JUMP_CUT_VELOCITY := -300.0
-# 跳跃辅助窗口：土狼时间与输入缓冲。
-const COYOTE_TIME := 0.1
-const JUMP_BUFFER_TIME := 0.1
+@export_group("Vertical")
+@export_range(0.0, 3000.0, 10.0) var gravity := 1200.0
+@export_range(0.0, 2000.0, 10.0) var max_fall_speed := 700.0
+
+@export_group("Jump")
+@export_range(-1000.0, 0.0, 10.0) var jump_velocity := -480.0
+
+@export_group("Dash")
+@export_range(0.0, 2000.0, 10.0) var dash_speed := 960.0
+@export_range(0.001, 1.0, 0.0001) var dash_duration := 1.0 / 6.0
+@export_range(0.0, 1.0, 0.01) var dash_cooldown := 0.2
+
+@export_group("Wall")
+# 272 依赖 air_friction=80、gravity=1200、jump_velocity=-480 带来的约 0.8 秒滞空时间；调整这些参数时需重算墙跳距离。
+@export_range(0.0, 1000.0, 10.0) var wall_jump_horizontal := 272.0
+@export_range(-1000.0, 0.0, 10.0) var wall_jump_vertical := -480.0
+
+@export_group("Timing")
+@export_range(0.0, 0.5, 0.01) var coyote_time := 0.1
+@export_range(0.0, 0.5, 0.01) var jump_buffer_time := 0.1
+@export_range(0.0, 0.5, 0.01) var dash_jump_preinput_time := 0.1
+@export_range(0.0, 0.5, 0.01) var wall_jump_coyote_time := 0.08
 
 var _coyote_timer := 0.0
 var _jump_buffer_timer := 0.0
+var _dash_jump_preinput_timer := 0.0
+var _double_jump_used := false
+var _wall_coyote_timer := 0.0
+var _dash_timer := 0.0
+var _dash_cooldown_timer := 0.0
+var _dash_available := true
+var _dash_direction := 1.0
+var _facing := 1.0
+var _touching_wall := false
+var _wall_normal := 0.0
 
 
 func _physics_process(delta: float) -> void:
 	_update_timers(delta)
-	_apply_horizontal_movement(delta)
-	_apply_gravity(delta)
-	_try_jump()
-	_apply_jump_cut()
+
+	if _dash_timer <= 0.0:
+		_try_start_dash()
+
+	if _dash_timer > 0.0:
+		_apply_dash(delta)
+	else:
+		_apply_horizontal_movement(delta)
+		_apply_gravity(delta)
+
+		if is_on_floor():
+			_try_jump()
+		elif not _try_wall_jump():
+			_try_jump()
 
 	move_and_slide()
+	_update_wall_state(delta)
+	_finish_dash_if_ended()
+
+
+func respawn(spawn_position: Vector2) -> void:
+	# 重置位置和全部动作状态，供关卡控制器在死亡后调用。
+	global_position = spawn_position
+	velocity = Vector2.ZERO
+	_dash_timer = 0.0
+	_dash_cooldown_timer = 0.0
+	_dash_available = true
+	_double_jump_used = false
+	_dash_jump_preinput_timer = 0.0
+	_coyote_timer = 0.0
+	_jump_buffer_timer = 0.0
+	_wall_coyote_timer = 0.0
+	_touching_wall = false
+	_wall_normal = 0.0
+	_facing = 1.0
 
 
 func _update_timers(delta: float) -> void:
-	# 落地刷新土狼时间，离开地面后逐帧减少。
+	_dash_cooldown_timer = maxf(_dash_cooldown_timer - delta, 0.0)
+	_dash_jump_preinput_timer = maxf(_dash_jump_preinput_timer - delta, 0.0)
+
 	if is_on_floor():
-		_coyote_timer = COYOTE_TIME
+		_coyote_timer = coyote_time
+		_dash_available = true
+		_double_jump_used = false
+		_dash_jump_preinput_timer = 0.0
 	else:
 		_coyote_timer = maxf(_coyote_timer - delta, 0.0)
 
-	# 按下跳跃写入缓冲，未按下时逐帧减少。
 	if Input.is_action_just_pressed("jump"):
-		_jump_buffer_timer = JUMP_BUFFER_TIME
+		if _dash_timer > 0.0:
+			_dash_jump_preinput_timer = dash_jump_preinput_time
+		else:
+			_jump_buffer_timer = jump_buffer_time
 	else:
 		_jump_buffer_timer = maxf(_jump_buffer_timer - delta, 0.0)
+
+	var direction := Input.get_axis("move_left", "move_right")
+	if direction != 0.0:
+		_facing = direction
+
+
+func _try_start_dash() -> void:
+	if not _dash_available or _dash_cooldown_timer > 0.0 or not Input.is_action_just_pressed("dash"):
+		return
+
+	var direction := Input.get_axis("move_left", "move_right")
+	if direction == 0.0:
+		return
+
+	_dash_direction = signf(direction)
+	_dash_timer = dash_duration
+	_dash_available = false
+	# 冲刺是主动动作，清掉土狼时间和地面跳跃缓冲。
+	_coyote_timer = 0.0
+	_jump_buffer_timer = 0.0
+	velocity = Vector2(_dash_direction * dash_speed, 0.0)
+
+
+func _apply_dash(delta: float) -> void:
+	# 冲刺期间保持固定水平速度，并暂停重力。
+	_dash_timer -= delta
+	velocity.x = _dash_direction * dash_speed
+	velocity.y = 0.0
+
+	if _dash_timer <= 0.0:
+		# 冲刺结束后才开始冷却。
+		_dash_cooldown_timer = dash_cooldown
+
+
+func _finish_dash_if_ended() -> void:
+	if _dash_timer > 0.0:
+		return
+
+	# 冲刺结束仍悬空、存在空中预输入且二跳未耗尽时，自动补一个二跳。
+	if not is_on_floor() and _dash_jump_preinput_timer > 0.0 and not _double_jump_used:
+		velocity.y = jump_velocity
+		_double_jump_used = true
+		_dash_jump_preinput_timer = 0.0
+
+
+func _try_wall_jump() -> bool:
+	if not _touching_wall or _wall_coyote_timer <= 0.0:
+		return false
+	if not Input.is_action_just_pressed("jump"):
+		return false
+
+	var away := -_wall_normal
+	if away == 0.0:
+		away = -_facing
+
+	_facing = away
+	velocity.x = away * wall_jump_horizontal
+	velocity.y = wall_jump_vertical
+	_dash_available = true
+	_dash_cooldown_timer = 0.0
+	_jump_buffer_timer = 0.0
+	_wall_coyote_timer = 0.0
+	return true
+
+
+func _update_wall_state(delta: float) -> void:
+	# 记录上一帧移动后的墙面接触状态，供下一帧判断墙跳。
+	if is_on_wall():
+		_touching_wall = true
+		_wall_normal = get_wall_normal().x
+		_wall_coyote_timer = wall_jump_coyote_time
+	else:
+		_touching_wall = false
+		_wall_coyote_timer = maxf(_wall_coyote_timer - delta, 0.0)
 
 
 func _apply_horizontal_movement(delta: float) -> void:
@@ -64,23 +196,23 @@ func _apply_horizontal_movement(delta: float) -> void:
 
 func _apply_gravity(delta: float) -> void:
 	if not is_on_floor():
-		velocity.y = minf(velocity.y + GRAVITY * delta, MAX_FALL_SPEED)
+		velocity.y = minf(velocity.y + gravity * delta, max_fall_speed)
 	else:
 		velocity.y = 0.0
 
 
 func _try_jump() -> void:
-	# 土狼时间允许离地瞬间起跳，输入缓冲允许落地前提前按下。
 	if _jump_buffer_timer > 0.0 and _coyote_timer > 0.0:
-		velocity.y = JUMP_VELOCITY
+		velocity.y = jump_velocity
 		_jump_buffer_timer = 0.0
 		_coyote_timer = 0.0
+		return
 
-
-func _apply_jump_cut() -> void:
-	# 上升途中松开跳跃就截断竖直速度，实现长按高跳、短按低跳。
-	if Input.is_action_just_released("jump") and velocity.y < JUMP_CUT_VELOCITY:
-		velocity.y = JUMP_CUT_VELOCITY
+	# 二段跳只在空中、未耗尽时按下瞬间触发，不吃地面缓冲。
+	if not is_on_floor() and not _double_jump_used and Input.is_action_just_pressed("jump"):
+		velocity.y = jump_velocity
+		_double_jump_used = true
+		_dash_jump_preinput_timer = 0.0
 
 
 func _approach(current: float, target: float, amount: float) -> float:
