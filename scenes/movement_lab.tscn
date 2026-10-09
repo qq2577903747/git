@@ -1,0 +1,22 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/movement_lab_controller.gd" id="1_lab"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2_player"]
+
+[node name="MovementLab" type="Node2D"]
+script = ExtResource("1_lab")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector2(112, 616)
+
+[node name="HUD" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="StateLabel" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 520.0
+offset_bottom = 140.0
+text = "Movement Lab"

@@ -1,35 +1,39 @@
 extends CharacterBody2D
 
-@export_group("水平移动")
-@export_range(0.0, 600.0, 1.0) var ground_speed := 360.0
-@export_range(0.0, 600.0, 1.0) var air_speed := 234.0
+@export_group("Horizontal")
+@export_range(0.0, 600.0, 1.0) var ground_speed := 240.0
+@export_range(0.0, 600.0, 1.0) var air_speed := 240.0
 @export_range(0.0, 5000.0, 10.0) var ground_acceleration := 4000.0
 @export_range(0.0, 5000.0, 10.0) var air_acceleration := 4000.0
 @export_range(0.0, 3000.0, 10.0) var ground_friction := 1600.0
 @export_range(0.0, 500.0, 1.0) var air_friction := 80.0
 
-@export_group("跳跃")
-@export_range(-1000.0, 0.0, 10.0) var jump_velocity := -560.0
+@export_group("Vertical")
+@export_range(0.0, 3000.0, 10.0) var gravity := 1200.0
+@export_range(0.0, 2000.0, 10.0) var max_fall_speed := 700.0
 
-@export_group("冲刺")
-@export_range(0.0, 2000.0, 10.0) var dash_speed := 1066.6667
-@export_range(0.01, 1.0, 0.01) var dash_duration := 0.15
+@export_group("Jump")
+@export_range(-1000.0, 0.0, 10.0) var jump_velocity := -480.0
 
-@export_group("墙跳")
-@export_range(0.0, 1000.0, 10.0) var wall_jump_horizontal := 420.0
-@export_range(-1000.0, 0.0, 10.0) var wall_jump_vertical := -520.0
+@export_group("Dash")
+@export_range(0.0, 2000.0, 10.0) var dash_speed := 960.0
+@export_range(0.001, 1.0, 0.0001) var dash_duration := 1.0 / 6.0
+@export_range(0.0, 1.0, 0.01) var dash_cooldown := 0.2
+
+@export_group("Wall")
+# 272 依赖 air_friction=80、gravity=1200、jump_velocity=-480 带来的约 0.8 秒滞空时间；调整这些参数时需重算墙跳距离。
+@export_range(0.0, 1000.0, 10.0) var wall_jump_horizontal := 272.0
+@export_range(-1000.0, 0.0, 10.0) var wall_jump_vertical := -480.0
+
+@export_group("Timing")
+@export_range(0.0, 0.5, 0.01) var coyote_time := 0.1
+@export_range(0.0, 0.5, 0.01) var jump_buffer_time := 0.1
+@export_range(0.0, 0.5, 0.01) var dash_jump_preinput_time := 0.1
 @export_range(0.0, 0.5, 0.01) var wall_jump_coyote_time := 0.08
-
-const GRAVITY := 1400.0
-const MAX_FALL_SPEED := 700.0
-const COYOTE_TIME := 0.1
-const JUMP_BUFFER_TIME := 0.1
-const DASH_COOLDOWN := 0.2
-const AIR_PREINPUT_TIME := 0.1
 
 var _coyote_timer := 0.0
 var _jump_buffer_timer := 0.0
-var _air_jump_preinput_timer := 0.0
+var _dash_jump_preinput_timer := 0.0
 var _double_jump_used := false
 var _wall_coyote_timer := 0.0
 var _dash_timer := 0.0
@@ -71,7 +75,7 @@ func respawn(spawn_position: Vector2) -> void:
 	_dash_cooldown_timer = 0.0
 	_dash_available = true
 	_double_jump_used = false
-	_air_jump_preinput_timer = 0.0
+	_dash_jump_preinput_timer = 0.0
 	_coyote_timer = 0.0
 	_jump_buffer_timer = 0.0
 	_wall_coyote_timer = 0.0
@@ -82,21 +86,21 @@ func respawn(spawn_position: Vector2) -> void:
 
 func _update_timers(delta: float) -> void:
 	_dash_cooldown_timer = maxf(_dash_cooldown_timer - delta, 0.0)
-	_air_jump_preinput_timer = maxf(_air_jump_preinput_timer - delta, 0.0)
+	_dash_jump_preinput_timer = maxf(_dash_jump_preinput_timer - delta, 0.0)
 
 	if is_on_floor():
-		_coyote_timer = COYOTE_TIME
+		_coyote_timer = coyote_time
 		_dash_available = true
 		_double_jump_used = false
-		_air_jump_preinput_timer = 0.0
+		_dash_jump_preinput_timer = 0.0
 	else:
 		_coyote_timer = maxf(_coyote_timer - delta, 0.0)
 
 	if Input.is_action_just_pressed("jump"):
 		if _dash_timer > 0.0:
-			_air_jump_preinput_timer = AIR_PREINPUT_TIME
+			_dash_jump_preinput_timer = dash_jump_preinput_time
 		else:
-			_jump_buffer_timer = JUMP_BUFFER_TIME
+			_jump_buffer_timer = jump_buffer_time
 	else:
 		_jump_buffer_timer = maxf(_jump_buffer_timer - delta, 0.0)
 
@@ -130,7 +134,7 @@ func _apply_dash(delta: float) -> void:
 
 	if _dash_timer <= 0.0:
 		# 冲刺结束后才开始冷却。
-		_dash_cooldown_timer = DASH_COOLDOWN
+		_dash_cooldown_timer = dash_cooldown
 
 
 func _finish_dash_if_ended() -> void:
@@ -138,10 +142,10 @@ func _finish_dash_if_ended() -> void:
 		return
 
 	# 冲刺结束仍悬空、存在空中预输入且二跳未耗尽时，自动补一个二跳。
-	if not is_on_floor() and _air_jump_preinput_timer > 0.0 and not _double_jump_used:
+	if not is_on_floor() and _dash_jump_preinput_timer > 0.0 and not _double_jump_used:
 		velocity.y = jump_velocity
 		_double_jump_used = true
-		_air_jump_preinput_timer = 0.0
+		_dash_jump_preinput_timer = 0.0
 
 
 func _try_wall_jump() -> bool:
@@ -192,7 +196,7 @@ func _apply_horizontal_movement(delta: float) -> void:
 
 func _apply_gravity(delta: float) -> void:
 	if not is_on_floor():
-		velocity.y = minf(velocity.y + GRAVITY * delta, MAX_FALL_SPEED)
+		velocity.y = minf(velocity.y + gravity * delta, max_fall_speed)
 	else:
 		velocity.y = 0.0
 
@@ -208,7 +212,7 @@ func _try_jump() -> void:
 	if not is_on_floor() and not _double_jump_used and Input.is_action_just_pressed("jump"):
 		velocity.y = jump_velocity
 		_double_jump_used = true
-		_air_jump_preinput_timer = 0.0
+		_dash_jump_preinput_timer = 0.0
 
 
 func _approach(current: float, target: float, amount: float) -> float:
